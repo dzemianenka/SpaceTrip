@@ -10,6 +10,7 @@ struct SHIP {
     double fuel;
 };
 
+const char* NAME_OF_FILE = "SpaceTrip.txt";
 const double DEFAULT_MIN_DISTANCE = 99999.99;
 const int DEFAULT_INDEX_OF_MIN_DISTANCE = 999;
 const int START_INDEX = 0;
@@ -17,12 +18,14 @@ const int START_INDEX = 0;
 double** initializeMap(int stars);
 void createStarMap(double *const *starMap, int stars);
 void calculateFuelMap(double *const *starMap, double *const *fuelMap, const SHIP &ship, int stars);
-template <typename T> void doInsertDefault(T *array, int stars, T defaultValue);
+template <typename T> T* doInsertDefault(int stars, T defaultValue);
 void printMap(double *const *map, int stars, ofstream &file, const char *text);
 void findTheBestWay(double *const *map, const SHIP &ship, int stars, ofstream &file);
 void getMinDistanceToEachStar(double *const *map, double *minDistance, int stars);
-void printOptimalWay(double *const *map, double const *minDistance, const SHIP &ship, int stars, ofstream &file);
-void checkIfItPossibleToPassOptimalWay(double *const *map, const SHIP &ship, const int *way, int k, ofstream &file);
+void printOptimalPath(double *const *map, double const *minDistance, const SHIP &ship, int stars, ofstream &file);
+void checkIfItPossibleToPassOptimalPath(double *const *map, const SHIP &ship, const int *path, int k, ofstream &file);
+void printDescription(ofstream &file, const char *text);
+void printFooter(ofstream &file);
 
 int main() {
     int stars;
@@ -35,16 +38,9 @@ int main() {
     printf("Insert the ship fuel(double): ");
     scanf("%lf", &ship.fuel);
 
-    char timeStr[34];
-    time_t rawTime;
-    struct tm * timeInfo;
-    time(&rawTime);
-    timeInfo = localtime (&rawTime);
-    strftime(timeStr, 34, "%d.%m.%Y_%H:%M:%S_SpaceTrip.txt\n", timeInfo);
-
-    ofstream file(timeStr, ios_base::app);
+    ofstream file(NAME_OF_FILE, ios_base::app);
     if (!file.is_open()) {
-        printf("Error to open file '%s'\n", timeStr);
+        printf("Error to open file '%s'\n", NAME_OF_FILE);
         return 1;
     }
 
@@ -52,12 +48,15 @@ int main() {
     createStarMap(starMap, stars);
     printMap(starMap, stars, file, "Star Map");
     findTheBestWay(starMap, ship, stars, file);
+    printDescription(file, "faster");
 
     auto **fuelMap = initializeMap(stars);
     calculateFuelMap(starMap, fuelMap, ship, stars);
     printMap(fuelMap, stars, file, "Fuel Map");
     findTheBestWay(fuelMap, ship, stars, file);
+    printDescription(file, "more economical");
 
+    printFooter(file);
     file.close();
     return 0;
 }
@@ -92,15 +91,17 @@ void calculateFuelMap(double *const *starMap, double *const *fuelMap, const SHIP
     }
 }
 
-template <typename T> void doInsertDefault(T *array, int stars, T defaultValue) {
+template <typename T> T* doInsertDefault(int stars, T defaultValue) {
+    auto *array = new T[stars];
     for (int i = 0; i < stars; i++) {
         array[i] = defaultValue;
     }
+    return array;
 }
 
 void printMap(double *const *map, int stars, ofstream &file, const char *text) {
-    printf("%s\n", text);
-    file << text << "\n";
+    printf("\n%s\n", text);
+    file << "\n" << text << "\n";
     for (int i = 0; i < stars; i++) {
         for (int j = 0; j < stars; j++) {
             printf("%.2lf ", map[i][j]);
@@ -112,24 +113,22 @@ void printMap(double *const *map, int stars, ofstream &file, const char *text) {
 }
 
 void findTheBestWay(double *const *map, const SHIP &ship, int stars, ofstream &file) {
-    auto *minDistance = new double[stars];
-    doInsertDefault(minDistance, stars, DEFAULT_MIN_DISTANCE);
+    auto *minDistance = doInsertDefault(stars, DEFAULT_MIN_DISTANCE);
 
     getMinDistanceToEachStar(map, minDistance, stars);
 
-    printf("Min distance to star: ");
-    file << "Min distance to star: ";
+    printf("Min distance to another stars: ");
+    file << "Min distance to another stars: ";
     for (int i = 0; i < stars; i++) {
         printf("%.2lf ", minDistance[i]);
         file << fixed << setprecision(2) << minDistance[i] << " ";
     }
 
-    printOptimalWay(map, minDistance, ship, stars, file);
+    printOptimalPath(map, minDistance, ship, stars, file);
 }
 
 void getMinDistanceToEachStar(double *const *map, double *minDistance, int stars) {
-    auto *visited = new bool[stars];
-    doInsertDefault(visited, stars, false);
+    auto *visited = doInsertDefault(stars, false);
 
     minDistance[START_INDEX] = 0;
     int indexOfMinDistance;
@@ -158,10 +157,10 @@ void getMinDistanceToEachStar(double *const *map, double *minDistance, int stars
     } while (indexOfMinDistance < DEFAULT_INDEX_OF_MIN_DISTANCE);
 }
 
-void printOptimalWay(double *const *map, double const *minDistance, const SHIP &ship, int stars, ofstream &file) {
-    int way[stars];
+void printOptimalPath(double *const *map, double const *minDistance, const SHIP &ship, int stars, ofstream &file) {
+    int path[stars];
     int end = stars - 1;
-    way[0] = stars;
+    path[0] = stars;
     int k = 1;
     double reverseTraversal = minDistance[end];
     while (end != START_INDEX) {
@@ -171,30 +170,40 @@ void printOptimalWay(double *const *map, double const *minDistance, const SHIP &
                 if (temp == minDistance[i]) {
                     reverseTraversal = temp;
                     end = i;
-                    way[k] = i + 1;
+                    path[k] = i + 1;
                     k++;
                 }
             }
         }
     }
 
-    checkIfItPossibleToPassOptimalWay(map, ship, way, k, file);
+    checkIfItPossibleToPassOptimalPath(map, ship, path, k, file);
 
-    printf("\nOptimal way: ");
-    file << "\nOptimal way: ";
+    printf("\nOptimal path: ");
+    file << "\nOptimal path: ";
     for (int i = k - 1; i >= 0; i--) {
-        printf("%d ", way[i]);
-        file << way[i] << " ";
+        printf("%d ", path[i]);
+        file << path[i] << " ";
     }
-    printf("\n\n");
-    file << "\n\n";
+    printf("\n");
+    file << "\n";
 }
 
-void checkIfItPossibleToPassOptimalWay(double *const *map, const SHIP &ship, const int *way, int k, ofstream &file) {
+void checkIfItPossibleToPassOptimalPath(double *const *map, const SHIP &ship, const int *path, int k, ofstream &file) {
     for (int i = k - 1; i > 0; i--) {
-        if (map[way[i]-1][way[i-1]-1] > ship.jump) {
-            printf("\nError: jump of your ship less than optimal way");
-            file << "\nError: jump of your ship less than optimal way";
+        if (map[path[i] - 1][path[i - 1] - 1] > ship.jump) {
+            printf("\nError: jump of your ship less than optimal path");
+            file << "\nError: jump of your ship less than optimal path";
         }
     }
+}
+
+void printDescription(ofstream &file, const char *text) {
+    printf("This is a %s way\n", text);
+    file << "This is a " << text << " way\n";
+}
+
+void printFooter(ofstream &file) {
+    printf("\nYou can chose between fastest and more economical ways\n====================\n");
+    file << "\nYou can chose between fastest and more economical ways\n====================\n";
 }
